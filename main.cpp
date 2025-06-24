@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <unordered_map>
 
 #define PORT 8080
 #define ll long long
@@ -33,11 +34,86 @@ struct request {
   unordered_map<string, string>
       headers; // HTTP headers (e.g., Content-Type, User-Agent)
   string body;
-  string parameters;
+  unordered_map<string, string> parameters;
   request(string raw_request) {
-    char buffer[4096] = {0};
+    int data_read = 0;
+    string parameters_string;
+    string full_path;
     for (int i = 0; i < raw_request.size(); i++) {
-      buffer[i] = raw_request[i];
+      // method
+      if (raw_request[i] == ' ' && data_read == 0) {
+        method = raw_request.substr(0, i);
+        data_read++;
+        continue;
+      }
+
+      // path
+      if (raw_request[i] == ' ' && data_read == 1) {
+        full_path =
+            raw_request.substr(method.size() + 1, (i - method.size()) - 1);
+        size_t query_start = full_path.find('?');
+        if (query_start != string::npos) {
+          path = full_path.substr(0, query_start);
+          string parameters_string = full_path.substr(query_start + 1);
+          size_t equalPos;
+          size_t startPos = 0;
+          for (size_t j = 0; j <= parameters_string.size(); j++) {
+            if (j == parameters_string.size() || parameters_string[j] == '&') {
+              if (equalPos > startPos) {
+                string key =
+
+                    parameters_string.substr(startPos, equalPos - startPos);
+                string value =
+                    parameters_string.substr(equalPos + 1, j - equalPos - 1);
+                parameters[key] = value;
+              }
+              startPos = j + 1;
+            } else if (parameters_string[j] == '=') {
+              equalPos = j;
+            }
+          }
+
+          data_read++;
+        }
+      }
+      // version
+      if (raw_request[i] == '\r' && data_read == 2) {
+        version = raw_request.substr(method.size() + full_path.size() + 2,
+                                     i - (method.size() + path.size()) - 2);
+        data_read++;
+      }
+      if (raw_request[i] == '\r' && raw_request[i + 1] == '\n' &&
+          raw_request[i + 2] == '\r' && raw_request[i + 3] == '\n' &&
+          data_read == 3) {
+        size_t headers_start =
+            method.size() + 1 + path.size() + 1 + version.size() + 2;
+        size_t headers_end = i;
+        string headers_string =
+            raw_request.substr(headers_start, headers_end - headers_start);
+        size_t colPos;
+        size_t startPos = 0;
+        for (size_t j = 0; j <= headers_string.size(); j++) {
+          if (j == headers_string.size() || headers_string[j] == '\r') {
+            if (colPos > startPos) {
+              string key = headers_string.substr(startPos, colPos - startPos);
+              string value = headers_string.substr(colPos + 2, j - colPos - 2);
+              headers[key] = value;
+            }
+            startPos = j + 2;
+          } else if (headers_string[j] == ':') {
+            colPos = j;
+          }
+        }
+        data_read++;
+      }
+      if (data_read == 4 && raw_request[i] == '\r' &&
+          raw_request[i + 1] == '\n' && raw_request[i + 2] == '\r' &&
+          raw_request[i + 3] == '\n') {
+        size_t body_start = i + 4;
+        if (body_start < raw_request.size()) {
+          body = raw_request.substr(body_start);
+        }
+      }
     }
   }
 };
@@ -108,10 +184,22 @@ int main() {
     if (bytes_received > 0) {
       string raw_request(buffer, bytes_received);
       // Parse this string with your parse_request function
-      cout << raw_request << endl;
+      cout << "RAW REQUEST" << endl
+           << raw_request << endl
+           << "END RAW REQUEST" << endl;
       request request(raw_request);
-      cout << "Method: " << request.method << endl;
-      cout << "last: " << request.method[request.method.size() - 1] << endl;
+      cout << endl << "Method: " << request.method << endl;
+      cout << "Path: " << request.path << endl;
+      cout << "Parameters:" << endl;
+      for (auto parameter : request.parameters) {
+        cout << parameter.first << " = " << parameter.second << endl;
+      };
+      cout << "Version: " << request.version << endl;
+      cout << "Headers:" << endl;
+      for (const auto &header : request.headers) {
+        cout << header.first << ": " << header.second << endl;
+      }
+      cout << "Body: " << request.body << endl;
     }
 
     // create response
@@ -128,7 +216,7 @@ int main() {
     if (bytes_sent < 0)
       error("ERROR sending message");
 
-    cout << "Sent message to client: " << endl << message << endl;
+    cout << endl << "Sent message to client: " << message << endl;
 
     // close the connection
     close(newsockfd);
