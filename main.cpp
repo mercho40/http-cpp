@@ -54,6 +54,7 @@ struct request {
         size_t query_start = full_path.find('?');
         if (query_start != string::npos) {
           path = full_path.substr(0, query_start);
+          // parameters
           string parameters_string = full_path.substr(query_start + 1);
           size_t equalPos;
           size_t startPos = 0;
@@ -83,6 +84,7 @@ struct request {
                                i - (method.size() + full_path.size()) - 2);
         data_read++;
       }
+      // headers
       if (raw_request[i] == '\r' && raw_request[i + 1] == '\n' &&
           raw_request[i + 2] == '\r' && raw_request[i + 3] == '\n' &&
           data_read == 3) {
@@ -102,11 +104,23 @@ struct request {
             }
             startPos = j + 2;
           } else if (headers_string[j] == ':') {
-            colPos = j;
+            bool found = false;
+            for (int k = j - 1; k > 0; k--) {
+              if (headers_string[k] == '\r') {
+                break;
+              } else if (headers_string[k] == ':') {
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              colPos = j;
+            }
           }
         }
         data_read++;
       }
+      // body
       if (data_read == 4 && raw_request[i] == '\r' &&
           raw_request[i + 1] == '\n' && raw_request[i + 2] == '\r' &&
           raw_request[i + 3] == '\n') {
