@@ -78,15 +78,16 @@ struct request {
       }
       // version
       if (raw_request[i] == '\r' && data_read == 2) {
-        version = raw_request.substr(method.size() + full_path.size() + 2,
-                                     i - (method.size() + path.size()) - 2);
+        version =
+            raw_request.substr(method.size() + full_path.size() + 2,
+                               i - (method.size() + full_path.size()) - 2);
         data_read++;
       }
       if (raw_request[i] == '\r' && raw_request[i + 1] == '\n' &&
           raw_request[i + 2] == '\r' && raw_request[i + 3] == '\n' &&
           data_read == 3) {
         size_t headers_start =
-            method.size() + 1 + path.size() + 1 + version.size() + 2;
+            method.size() + 1 + full_path.size() + 1 + version.size() + 2;
         size_t headers_end = i;
         string headers_string =
             raw_request.substr(headers_start, headers_end - headers_start);
