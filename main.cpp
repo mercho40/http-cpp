@@ -207,7 +207,7 @@ int main() {
                     "OK",
                     "HTTP/1.1",
                     {{"Content-Type", "text/plain"}, {"Connection", "close"}},
-                    "panfleto cacerola"};
+                    "Hello Neighborhood!"};
     string response = res.build_response();
     char *message = &response[0];
 
