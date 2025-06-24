@@ -1,4 +1,5 @@
 #include <cstring>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <netinet/in.h>
@@ -52,6 +53,7 @@ struct request {
         full_path =
             raw_request.substr(method.size() + 1, (i - method.size()) - 1);
         size_t query_start = full_path.find('?');
+        path = full_path.substr(0, query_start);
         if (query_start != string::npos) {
           path = full_path.substr(0, query_start);
           // parameters
@@ -73,9 +75,8 @@ struct request {
               equalPos = j;
             }
           }
-
-          data_read++;
         }
+        data_read++;
       }
       // version
       if (raw_request[i] == '\r' && data_read == 2) {
@@ -158,6 +159,50 @@ struct response {
   }
 };
 
+// routes with their handlers functions:
+response homeHandler(const request &req) {
+  response res;
+  res.status = 200;
+  res.message = "OK";
+  res.version = "HTTP/1.1";
+  res.headers["Content-Type"] = "text/plain";
+  res.headers["Connection"] = "close";
+  res.body = "Welcome to the Home Page!";
+  return res;
+}
+response aboutHandler(const request &req) {
+  response res;
+  res.status = 200;
+  res.message = "OK";
+  res.version = "HTTP/1.1";
+  res.headers["Content-Type"] = "text/plain";
+  res.headers["Connection"] = "close";
+  res.body = "This is the About Page!";
+  return res;
+}
+response defaultHandler(const request &req) {
+  response res;
+  res.status = 404;
+  res.message = "Not Found";
+  res.version = "HTTP/1.1";
+  res.headers["Content-Type"] = "text/plain";
+  res.headers["Connection"] = "close";
+  res.body = "404 - Page Not Found";
+  return res;
+}
+
+unordered_map<string, response (*)(const request &)> routes = {
+    {"/", homeHandler},
+    {"/about", aboutHandler},
+
+};
+response routeRequest(const request &req) {
+  auto it = routes.find(req.path);
+  if (it != routes.end()) {
+    return it->second(req);
+  }
+  return defaultHandler(req);
+}
 int main() {
   // create a socket
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -198,40 +243,38 @@ int main() {
 
     if (bytes_received > 0) {
       string raw_request(buffer, bytes_received);
-      // Parse this string with your parse_request function
-      cout << "RAW REQUEST" << endl
-           << raw_request << endl
-           << "END RAW REQUEST" << endl;
       request request(raw_request);
-      cout << endl << "Method: " << request.method << endl;
-      cout << "Path: " << request.path << endl;
-      cout << "Parameters:" << endl;
-      for (auto parameter : request.parameters) {
-        cout << parameter.first << " = " << parameter.second << endl;
-      };
-      cout << "Version: " << request.version << endl;
-      cout << "Headers:" << endl;
-      for (const auto &header : request.headers) {
-        cout << header.first << ": " << header.second << endl;
+      // Parse this string with your parse_request function
+      // cout << "RAW REQUEST" << endl
+      //      << raw_request << endl
+      //      << "END RAW REQUEST" << endl;
+      // cout << endl << "Method: " << request.method << endl;
+      // cout << "Path: " << request.path << endl;
+      // cout << "Parameters:" << endl;
+      // for (auto parameter : request.parameters) {
+      //   cout << parameter.first << " = " << parameter.second << endl;
+      // };
+      // cout << "Version: " << request.version << endl;
+      // cout << "Headers:" << endl;
+      // for (const auto &header : request.headers) {
+      //   cout << header.first << ": " << header.second << endl;
+      // }
+      // cout << "Body: " << request.body << endl;
+
+      response res = routeRequest(request);
+      string response = res.build_response();
+      char *message = &response[0];
+
+      // send the response to the client
+      ssize_t bytes_sent = send(newsockfd, message, strlen(message), 0);
+      if (bytes_sent < 0) {
+        error("ERROR sending message");
       }
-      cout << "Body: " << request.body << endl;
+
+      cout << endl << "Sent message to client: " << endl << message << endl;
+    } else {
+      error("ERROR reading from socket");
     }
-
-    // create response
-    response res = {200,
-                    "OK",
-                    "HTTP/1.1",
-                    {{"Content-Type", "text/plain"}, {"Connection", "close"}},
-                    "Hello Neighborhood!"};
-    string response = res.build_response();
-    char *message = &response[0];
-
-    // send the response to the client
-    ssize_t bytes_sent = send(newsockfd, message, strlen(message), 0);
-    if (bytes_sent < 0)
-      error("ERROR sending message");
-
-    cout << endl << "Sent message to client: " << message << endl;
 
     // close the connection
     close(newsockfd);
