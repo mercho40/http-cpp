@@ -1,4 +1,5 @@
 #include <cstring>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -202,6 +203,24 @@ response routeRequest(const request &req) {
     return it->second(req);
   }
   return defaultHandler(req);
+}
+
+string getFile(string url) {
+  ifstream file(url);
+  if (!file.is_open()) {
+    // print error message and return
+    cerr << "Failed to open file: " << url << endl;
+    return "";
+  }
+  string content;
+  string line;
+  while (getline(file, line)) {
+    content += line + "\n";
+  }
+
+  // Close the file
+  file.close();
+  return content;
 }
 int main() {
   // create a socket
